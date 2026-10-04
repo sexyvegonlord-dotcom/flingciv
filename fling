@@ -1,10 +1,12 @@
+print('heiie')
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
-local ANIMATION_ID = "rbxassetid://107619858171028"
 
-local currentTrack
+local ANIMATION_ID = "rbxassetid://81452236519669"
+local track
 
 local function playAnimation()
 	local character = player.Character or player.CharacterAdded:Wait()
@@ -17,32 +19,33 @@ local function playAnimation()
 		animator.Parent = humanoid
 	end
 
-	-- Stop previous copy
-	if currentTrack then
-		currentTrack:Stop(0)
-		currentTrack:Destroy()
-		currentTrack = nil
+	if track then
+		track:Stop()
+		track:Destroy()
 	end
 
 	local animation = Instance.new("Animation")
 	animation.AnimationId = ANIMATION_ID
 
-	currentTrack = animator:LoadAnimation(animation)
-	currentTrack.Priority = Enum.AnimationPriority.Action
-	currentTrack.Looped = true
-	currentTrack:Play(0.1)
-end
+	local success, result = pcall(function()
+		return animator:LoadAnimation(animation)
+	end)
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then
+	if not success then
+		warn("Animation failed to load:", result)
 		return
 	end
+
+	track = result
+	track.Priority = Enum.AnimationPriority.Action
+	track.Looped = true
+	track:Play()
+end
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
 
 	if input.KeyCode == Enum.KeyCode.Eight then
 		playAnimation()
 	end
-end)
-
-player.CharacterAdded:Connect(function()
-	currentTrack = nil
 end)
