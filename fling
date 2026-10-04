@@ -1,1 +1,136 @@
 
+--// 8 = Spin Fling Mode
+--// For your own Roblox game
+--// Hold the collision item, then press 8
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+
+local SPIN_SPEED = 100 -- Increase for faster spinning
+local STABILIZE = true
+
+local spinning = false
+local character
+local humanoid
+local root
+
+local attachment
+local angularVelocity
+
+local function setupCharacter(char)
+	character = char
+	humanoid = char:WaitForChild("Humanoid")
+	root = char:WaitForChild("HumanoidRootPart")
+
+	-- Clean old objects
+	if attachment then
+		attachment:Destroy()
+		attachment = nil
+	end
+
+	if angularVelocity then
+		angularVelocity:Destroy()
+		angularVelocity = nil
+	end
+
+	-- Attachment for controlled rotation
+	attachment = Instance.new("Attachment")
+	attachment.Name = "SpinAttachment"
+	attachment.Parent = root
+
+	angularVelocity = Instance.new("AngularVelocity")
+	angularVelocity.Name = "SpinController"
+	angularVelocity.Attachment0 = attachment
+	angularVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+	angularVelocity.MaxTorque = math.huge
+	angularVelocity.AngularVelocity = Vector3.zero
+	angularVelocity.Parent = root
+end
+
+local function stopSpin()
+	spinning = false
+
+	if angularVelocity then
+		angularVelocity.AngularVelocity = Vector3.zero
+	end
+
+	-- Remove sideways velocity so you don't fly away
+	if root then
+		local velocity = root.AssemblyLinearVelocity
+
+		root.AssemblyLinearVelocity = Vector3.new(
+			velocity.X * 0.1,
+			velocity.Y,
+			velocity.Z * 0.1
+		)
+	end
+end
+
+local function startSpin()
+	if not character or not root or not angularVelocity then
+		return
+	end
+
+	spinning = true
+
+	-- Spin around the vertical axis
+	angularVelocity.AngularVelocity = Vector3.new(
+		0,
+		SPIN_SPEED,
+		0
+	)
+end
+
+-- Toggle with 8
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then
+		return
+	end
+
+	if input.KeyCode == Enum.KeyCode.Eight then
+		if spinning then
+			stopSpin()
+		else
+			startSpin()
+		end
+	end
+end)
+
+-- Keep your character from gaining ridiculous horizontal velocity
+RunService.Heartbeat:Connect(function()
+	if not spinning or not root then
+		return
+	end
+
+	if STABILIZE then
+		local velocity = root.AssemblyLinearVelocity
+
+		-- Keep vertical movement normal but heavily damp horizontal movement
+		root.AssemblyLinearVelocity = Vector3.new(
+			velocity.X * 0.85,
+			velocity.Y,
+			velocity.Z * 0.85
+		)
+	end
+
+	-- Make sure the spin stays active
+	if angularVelocity then
+		angularVelocity.AngularVelocity = Vector3.new(
+			0,
+			SPIN_SPEED,
+			0
+		)
+	end
+end)
+
+player.CharacterAdded:Connect(function(char)
+	spinning = false
+	setupCharacter(char)
+end)
+
+if player.Character then
+	setupCharacter(player.Character)
+end
