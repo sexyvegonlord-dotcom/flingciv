@@ -1,103 +1,86 @@
---// Press 8 = Head moves toward feet
---// Press 8 again = Return to normal
+--// 8 = Remove head BillboardGui + Remote Event GUI
+--// K = Force respawn character
 
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 
-local character
-local humanoid
-local root
-local neck
+local REMOTE_GUI_NAMES = {
+	RemoteEventMonitor = true,
+	RemoteEventsGui = true,
+	RemoteEventGUI = true,
+	RemoteMonitor = true,
+	RemoteEventViewer = true
+}
 
-local active = false
-local connection
+local function removeStuff()
+	-- Remove BillboardGuis from your character's head
+	local character = player.Character
 
-local DURATION = 0.35
+	if character then
+		local head = character:FindFirstChild("Head")
 
-local function setupCharacter(char)
-	character = char
-	humanoid = char:WaitForChild("Humanoid")
-	root = char:WaitForChild("HumanoidRootPart")
-
-	local head = char:WaitForChild("Head")
-	neck = head:FindFirstChild("Neck")
-
-	if not neck then
-		neck = char:FindFirstChild("Neck", true)
-	end
-
-	active = false
-end
-
-local function animateHead()
-	if not neck or not root then
-		return
-	end
-
-	if connection then
-		connection:Disconnect()
-	end
-
-	local originalC0 = neck.C0
-
-	-- Bend head forward/down toward feet
-	local targetC0 =
-		originalC0
-		* CFrame.Angles(math.rad(-85), 0, 0)
-		* CFrame.new(0, -1.5, 0)
-
-	local startTime = tick()
-
-	connection = RunService.RenderStepped:Connect(function()
-		local alpha = math.clamp(
-			(tick() - startTime) / DURATION,
-			0,
-			1
-		)
-
-		-- Smooth animation
-		local smooth = alpha * alpha * (3 - 2 * alpha)
-
-		if active then
-			neck.C0 = originalC0:Lerp(targetC0, smooth)
-		else
-			neck.C0 = targetC0:Lerp(originalC0, smooth)
-		end
-
-		if alpha >= 1 then
-			connection:Disconnect()
-			connection = nil
-
-			if not active then
-				neck.C0 = originalC0
+		if head then
+			for _, object in ipairs(head:GetChildren()) do
+				if object:IsA("BillboardGui") then
+					object:Destroy()
+				end
 			end
 		end
+
+		-- Also check descendants of the character
+		for _, object in ipairs(character:GetDescendants()) do
+			if object:IsA("BillboardGui") then
+				object:Destroy()
+			end
+		end
+	end
+
+	-- Remove Remote Event monitoring GUI from PlayerGui
+	local playerGui = player:FindFirstChildOfClass("PlayerGui")
+
+	if playerGui then
+		for _, gui in ipairs(playerGui:GetChildren()) do
+			if gui:IsA("ScreenGui") then
+				if REMOTE_GUI_NAMES[gui.Name] then
+					gui:Destroy()
+				elseif string.find(string.lower(gui.Name), "remoteevent")
+					or string.find(string.lower(gui.Name), "remote event")
+					or string.find(string.lower(gui.Name), "remote monitor") then
+					gui:Destroy()
+				end
+			end
+		end
+	end
+end
+
+local function forceSpawn()
+	-- Request a fresh character
+	pcall(function()
+		player:LoadCharacter()
 	end)
 end
 
-UserInputService.InputBegan:Connect(function(input, processed)
+-- Keyboard controls
+game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
 	if processed then
 		return
 	end
 
+	-- 8 = delete GUI stuff
 	if input.KeyCode == Enum.KeyCode.Eight then
-		active = not active
-		animateHead()
+		removeStuff()
+	end
+
+	-- K = force spawn
+	if input.KeyCode == Enum.KeyCode.K then
+		forceSpawn()
 	end
 end)
 
-player.CharacterAdded:Connect(function(char)
-	if connection then
-		connection:Disconnect()
-		connection = nil
-	end
-
-	setupCharacter(char)
+-- Clean the GUI again after respawn
+player.CharacterAdded:Connect(function(character)
+	task.wait(0.5)
+	removeStuff()
 end)
-
-if player.Character then
-	setupCharacter(player.Character)
-end
