@@ -1,86 +1,48 @@
---// 8 = Remove head BillboardGui + Remote Event GUI
---// K = Force respawn character
-
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
+local ANIMATION_ID = "rbxassetid://107619858171028"
 
-local REMOTE_GUI_NAMES = {
-	RemoteEventMonitor = true,
-	RemoteEventsGui = true,
-	RemoteEventGUI = true,
-	RemoteMonitor = true,
-	RemoteEventViewer = true
-}
+local currentTrack
 
-local function removeStuff()
-	-- Remove BillboardGuis from your character's head
-	local character = player.Character
+local function playAnimation()
+	local character = player.Character or player.CharacterAdded:Wait()
+	local humanoid = character:WaitForChild("Humanoid")
 
-	if character then
-		local head = character:FindFirstChild("Head")
+	local animator = humanoid:FindFirstChildOfClass("Animator")
 
-		if head then
-			for _, object in ipairs(head:GetChildren()) do
-				if object:IsA("BillboardGui") then
-					object:Destroy()
-				end
-			end
-		end
-
-		-- Also check descendants of the character
-		for _, object in ipairs(character:GetDescendants()) do
-			if object:IsA("BillboardGui") then
-				object:Destroy()
-			end
-		end
+	if not animator then
+		animator = Instance.new("Animator")
+		animator.Parent = humanoid
 	end
 
-	-- Remove Remote Event monitoring GUI from PlayerGui
-	local playerGui = player:FindFirstChildOfClass("PlayerGui")
-
-	if playerGui then
-		for _, gui in ipairs(playerGui:GetChildren()) do
-			if gui:IsA("ScreenGui") then
-				if REMOTE_GUI_NAMES[gui.Name] then
-					gui:Destroy()
-				elseif string.find(string.lower(gui.Name), "remoteevent")
-					or string.find(string.lower(gui.Name), "remote event")
-					or string.find(string.lower(gui.Name), "remote monitor") then
-					gui:Destroy()
-				end
-			end
-		end
+	-- Stop previous copy
+	if currentTrack then
+		currentTrack:Stop(0)
+		currentTrack:Destroy()
+		currentTrack = nil
 	end
+
+	local animation = Instance.new("Animation")
+	animation.AnimationId = ANIMATION_ID
+
+	currentTrack = animator:LoadAnimation(animation)
+	currentTrack.Priority = Enum.AnimationPriority.Action
+	currentTrack.Looped = true
+	currentTrack:Play(0.1)
 end
 
-local function forceSpawn()
-	-- Request a fresh character
-	pcall(function()
-		player:LoadCharacter()
-	end)
-end
-
--- Keyboard controls
-game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
-	if processed then
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then
 		return
 	end
 
-	-- 8 = delete GUI stuff
 	if input.KeyCode == Enum.KeyCode.Eight then
-		removeStuff()
-	end
-
-	-- K = force spawn
-	if input.KeyCode == Enum.KeyCode.K then
-		forceSpawn()
+		playAnimation()
 	end
 end)
 
--- Clean the GUI again after respawn
-player.CharacterAdded:Connect(function(character)
-	task.wait(0.5)
-	removeStuff()
+player.CharacterAdded:Connect(function()
+	currentTrack = nil
 end)
