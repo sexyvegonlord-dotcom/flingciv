@@ -1,7 +1,5 @@
-
---// 8 = Spin Fling Mode
---// For your own Roblox game
---// Hold the collision item, then press 8
+--// Press 8 = Head moves toward feet
+--// Press 8 again = Return to normal
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -9,125 +7,94 @@ local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 
-local SPIN_SPEED = 100 -- Increase for faster spinning
-local STABILIZE = true
-
-local spinning = false
 local character
 local humanoid
 local root
+local neck
 
-local attachment
-local angularVelocity
+local active = false
+local connection
+
+local DURATION = 0.35
 
 local function setupCharacter(char)
 	character = char
 	humanoid = char:WaitForChild("Humanoid")
 	root = char:WaitForChild("HumanoidRootPart")
 
-	-- Clean old objects
-	if attachment then
-		attachment:Destroy()
-		attachment = nil
+	local head = char:WaitForChild("Head")
+	neck = head:FindFirstChild("Neck")
+
+	if not neck then
+		neck = char:FindFirstChild("Neck", true)
 	end
 
-	if angularVelocity then
-		angularVelocity:Destroy()
-		angularVelocity = nil
-	end
-
-	-- Attachment for controlled rotation
-	attachment = Instance.new("Attachment")
-	attachment.Name = "SpinAttachment"
-	attachment.Parent = root
-
-	angularVelocity = Instance.new("AngularVelocity")
-	angularVelocity.Name = "SpinController"
-	angularVelocity.Attachment0 = attachment
-	angularVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
-	angularVelocity.MaxTorque = math.huge
-	angularVelocity.AngularVelocity = Vector3.zero
-	angularVelocity.Parent = root
+	active = false
 end
 
-local function stopSpin()
-	spinning = false
-
-	if angularVelocity then
-		angularVelocity.AngularVelocity = Vector3.zero
-	end
-
-	-- Remove sideways velocity so you don't fly away
-	if root then
-		local velocity = root.AssemblyLinearVelocity
-
-		root.AssemblyLinearVelocity = Vector3.new(
-			velocity.X * 0.1,
-			velocity.Y,
-			velocity.Z * 0.1
-		)
-	end
-end
-
-local function startSpin()
-	if not character or not root or not angularVelocity then
+local function animateHead()
+	if not neck or not root then
 		return
 	end
 
-	spinning = true
+	if connection then
+		connection:Disconnect()
+	end
 
-	-- Spin around the vertical axis
-	angularVelocity.AngularVelocity = Vector3.new(
-		0,
-		SPIN_SPEED,
-		0
-	)
+	local originalC0 = neck.C0
+
+	-- Bend head forward/down toward feet
+	local targetC0 =
+		originalC0
+		* CFrame.Angles(math.rad(-85), 0, 0)
+		* CFrame.new(0, -1.5, 0)
+
+	local startTime = tick()
+
+	connection = RunService.RenderStepped:Connect(function()
+		local alpha = math.clamp(
+			(tick() - startTime) / DURATION,
+			0,
+			1
+		)
+
+		-- Smooth animation
+		local smooth = alpha * alpha * (3 - 2 * alpha)
+
+		if active then
+			neck.C0 = originalC0:Lerp(targetC0, smooth)
+		else
+			neck.C0 = targetC0:Lerp(originalC0, smooth)
+		end
+
+		if alpha >= 1 then
+			connection:Disconnect()
+			connection = nil
+
+			if not active then
+				neck.C0 = originalC0
+			end
+		end
+	end)
 end
 
--- Toggle with 8
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then
 		return
 	end
 
 	if input.KeyCode == Enum.KeyCode.Eight then
-		if spinning then
-			stopSpin()
-		else
-			startSpin()
-		end
-	end
-end)
-
--- Keep your character from gaining ridiculous horizontal velocity
-RunService.Heartbeat:Connect(function()
-	if not spinning or not root then
-		return
-	end
-
-	if STABILIZE then
-		local velocity = root.AssemblyLinearVelocity
-
-		-- Keep vertical movement normal but heavily damp horizontal movement
-		root.AssemblyLinearVelocity = Vector3.new(
-			velocity.X * 0.85,
-			velocity.Y,
-			velocity.Z * 0.85
-		)
-	end
-
-	-- Make sure the spin stays active
-	if angularVelocity then
-		angularVelocity.AngularVelocity = Vector3.new(
-			0,
-			SPIN_SPEED,
-			0
-		)
+		active = not active
+		animateHead()
 	end
 end)
 
 player.CharacterAdded:Connect(function(char)
-	spinning = false
+	if connection then
+		connection:Disconnect()
+		connection = nil
+	end
+
 	setupCharacter(char)
 end)
 
