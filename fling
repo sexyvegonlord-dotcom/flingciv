@@ -1,96 +1,104 @@
---// 8 = Head to Feet
---// 8 again = Restore normal head position
+-- HEAD TO FEET
+-- LocalScript
+-- Press 8 to toggle
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 
-local character
-local head
-local neck
+local ANIMATION_ID = "rbxassetid://91134423929961"
 
-local active = false
-local renderConnection
+local track = nil
+local enabled = false
 
-local MOVE_TIME = 0.5
-local DOWN_DISTANCE = 7
-
-local function setup(char)
-	character = char
-	head = char:WaitForChild("Head")
-
-	-- R15/R6 compatible neck search
-	neck = head:FindFirstChild("Neck")
-
-	if not neck then
-		neck = char:FindFirstChild("Neck", true)
-	end
-
-	active = false
+local function getCharacter()
+	return player.Character or player.CharacterAdded:Wait()
 end
 
 local function stopAnimation()
-	if renderConnection then
-		renderConnection:Disconnect()
-		renderConnection = nil
+	if track then
+		pcall(function()
+			track:Stop(0.15)
+			track:Destroy()
+		end)
+		track = nil
 	end
 end
 
-local function moveHead()
-	if not neck then return end
+local function startAnimation()
+	local character = getCharacter()
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+
+	-- Use the Animator Roblox already created for the character.
+	if not animator then
+		warn("No Animator found in character.")
+		return
+	end
 
 	stopAnimation()
 
-	local originalC0 = neck.C0
+	local animation = Instance.new("Animation")
+	animation.AnimationId = ANIMATION_ID
 
-	-- Move the head downward while keeping the neck orientation
-	local targetC0 =
-		originalC0 * CFrame.new(0, -DOWN_DISTANCE, 0)
+	local success, result = pcall(function()
+		return animator:LoadAnimation(animation)
+	end)
 
-	local startTime = os.clock()
+	animation:Destroy()
 
-	renderConnection = RunService.RenderStepped:Connect(function()
-		local alpha = math.clamp(
-			(os.clock() - startTime) / MOVE_TIME,
-			0,
-			1
-		)
+	if not success then
+		warn("Animation failed to load:", result)
+		return
+	end
 
-		-- Smooth movement
-		local smooth = alpha * alpha * (3 - 2 * alpha)
+	track = result
 
-		if active then
-			neck.C0 = originalC0:Lerp(targetC0, smooth)
-		else
-			neck.C0 = targetC0:Lerp(originalC0, smooth)
-		end
+	track.Priority = Enum.AnimationPriority.Action4
+	track.Looped = true
 
-		if alpha >= 1 then
-			if not active then
-				neck.C0 = originalC0
+	track:Play(0.15, 1, 1)
+
+	-- Keep it playing.
+	task.spawn(function()
+		while enabled and track == result do
+			if not result.IsPlaying then
+				pcall(function()
+					result:Play(0.15, 1, 1)
+				end)
 			end
-
-			stopAnimation()
+			task.wait(0.1)
 		end
 	end)
 end
 
+local function toggle()
+	enabled = not enabled
+
+	if enabled then
+		startAnimation()
+	else
+		stopAnimation()
+	end
+end
+
 UserInputService.InputBegan:Connect(function(input, processed)
-	if processed then return end
+	if processed then
+		return
+	end
 
 	if input.KeyCode == Enum.KeyCode.Eight then
-		active = not active
-		moveHead()
+		toggle()
 	end
 end)
 
-player.CharacterAdded:Connect(function(char)
-	stopAnimation()
-	setup(char)
+player.CharacterAdded:Connect(function()
+	enabled = false
+	track = nil
 end)
-
-if player.Character then
-	setup(player.Character)
-end
